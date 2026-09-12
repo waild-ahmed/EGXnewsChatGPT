@@ -40,52 +40,58 @@ jobs:
         run: |
           python src/monitor.py
 
-      - name: Save sent-news state
-        run: |
-          if git diff --quiet -- sent_news.json && git ls-files --error-unmatch sent_news.json >/dev/null 2>&1; then
-            echo "No state changes."
-            exit 0
-          fi
-
-          git config user.name "mubasher-monitor"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add sent_news.json
-
-          if git diff --cached --quiet; then
-            echo "No staged state changes."
-            exit 0
-          fi
-
-          git commit -m "Update sent news state"
-          git push
-
-  heartbeat:
-    # Keeps scheduled workflows active on public repositories even if
-    # there are no matching news for a long period.
-    runs-on: ubuntu-slim
-    if: github.event_name == 'schedule'
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 1
-
       - name: Update heartbeat
+        if: github.event_name == 'schedule'
         run: |
           mkdir -p .github
           printf '%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > .github/heartbeat.txt
 
-      - name: Commit heartbeat
+      - name: Verify state changes
+        run: |
+          echo "========================================"
+          echo "GIT STATUS"
+          echo "========================================"
+          git status --short
+
+          echo ""
+          echo "========================================"
+          echo "SENT NEWS DIFF"
+          echo "========================================"
+          git diff -- sent_news.json || true
+
+          echo ""
+          echo "========================================"
+          echo "SENT NEWS FILE"
+          echo "========================================"
+
+          if [ -f sent_news.json ]; then
+            cat sent_news.json
+          else
+            echo "ERROR: sent_news.json does not exist!"
+            exit 1
+          fi
+
+      - name: Commit and push state
         run: |
           git config user.name "mubasher-monitor"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/heartbeat.txt
+
+          git add sent_news.json .github/heartbeat.txt
 
           if git diff --cached --quiet; then
-            echo "No heartbeat changes."
+            echo "No changes to commit."
             exit 0
           fi
 
-          git commit -m "Heartbeat"
+          echo "Changes ready to commit:"
+          git diff --cached --stat
+
+          git commit -m "Update monitor state"
+
+          echo "Pushing changes to GitHub..."
+
           git push
+
+          echo "========================================"
+          echo "STATE PUSHED SUCCESSFULLY"
+          echo "========================================"
