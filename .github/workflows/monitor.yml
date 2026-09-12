@@ -1,0 +1,91 @@
+name: Mubasher Telegram Monitor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mubasher-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run monitor
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python src/monitor.py
+
+      - name: Save sent-news state
+        run: |
+          if git diff --quiet -- sent_news.json && git ls-files --error-unmatch sent_news.json >/dev/null 2>&1; then
+            echo "No state changes."
+            exit 0
+          fi
+
+          git config user.name "mubasher-monitor"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add sent_news.json
+
+          if git diff --cached --quiet; then
+            echo "No staged state changes."
+            exit 0
+          fi
+
+          git commit -m "Update sent news state"
+          git push
+
+  heartbeat:
+    # Keeps scheduled workflows active on public repositories even if
+    # there are no matching news for a long period.
+    runs-on: ubuntu-slim
+    if: github.event_name == 'schedule'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Update heartbeat
+        run: |
+          mkdir -p .github
+          printf '%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > .github/heartbeat.txt
+
+      - name: Commit heartbeat
+        run: |
+          git config user.name "mubasher-monitor"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/heartbeat.txt
+
+          if git diff --cached --quiet; then
+            echo "No heartbeat changes."
+            exit 0
+          fi
+
+          git commit -m "Heartbeat"
+          git push
