@@ -13,7 +13,9 @@ from bs4 import BeautifulSoup
 
 
 MUBASHER_URL = "https://www.mubasher.info/news/eg/pulse/stocks"
-STATE_FILE = Path("sent_news.json")
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+STATE_FILE = PROJECT_ROOT / "sent_news.json"
 
 REQUEST_TIMEOUT = 30
 MAX_RETRIES = 4
@@ -411,6 +413,8 @@ def main() -> int:
 
     session = requests.Session()
     sent = load_state()
+
+    log(f"State file: {STATE_FILE.resolve()}")
     log(f"Loaded sent state: {len(sent)} URLs")
 
     try:
